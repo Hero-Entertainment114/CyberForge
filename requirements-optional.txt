@@ -1,0 +1,6 @@
+# Optional structured forensic / YARA parsers; not required by core.
+python-evtx
+python-registry
+yara-python
+cryptography>=42.0.0  # AES-256-GCM Evidence Vault
+psutil>=5.9.0  # Optional process/resource telemetry

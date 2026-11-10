@@ -1,0 +1,3 @@
+PyInstaller>=6.0,<7.0
+cryptography>=42.0.0
+psutil>=5.9.0

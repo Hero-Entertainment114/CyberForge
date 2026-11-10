@@ -1,0 +1,2 @@
+# Backward-compatible alias for the Windows desktop build environment.
+-r requirements-build-windows.txt

@@ -1,0 +1,7 @@
+-r requirements-build-common.txt
+pywebview>=5.0,<7.0
+pyobjc-core>=10.0
+pyobjc-framework-Cocoa>=10.0
+pyobjc-framework-WebKit>=10.0
+pyobjc-framework-Quartz>=10.0
+pyobjc-framework-security>=10.0

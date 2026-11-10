@@ -1,0 +1,2 @@
+-r requirements-build-common.txt
+pywebview[pyside6]>=5.0,<7.0

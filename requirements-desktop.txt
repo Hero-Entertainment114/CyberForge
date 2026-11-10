@@ -1,0 +1,3 @@
+# Backward-compatible alias for Windows source-mode desktop shell installation.
+# macOS/Linux should use their platform-specific requirements-desktop-*.txt file.
+-r requirements-desktop-windows.txt

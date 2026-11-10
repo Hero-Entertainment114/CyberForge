@@ -1,0 +1,2 @@
+# Required for AES-256-GCM encrypted Evidence Vault in source mode.
+cryptography>=42.0.0

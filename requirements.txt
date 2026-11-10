@@ -1,0 +1,6 @@
+# Core app: Python standard library only. No pip install required.
+# Optional integrations (install separately, not required by the core):
+#   yara-python  - in-process YARA engine; alternatively install YARA CLI
+#   ClamAV      - clamscan executable + updated signature database
+#   Docker/Podman + python:3.12-alpine / node:22-alpine images for isolated code runner
+#   Node.js     - local JavaScript syntax-only parser check
