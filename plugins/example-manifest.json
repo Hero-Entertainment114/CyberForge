@@ -1,0 +1,15 @@
+{
+  "id": "example.indicator-enricher",
+  "name": "Example Local Knowledge Enricher",
+  "version": "1.0.0",
+  "api_version": "1",
+  "description": "A minimal offline plugin sample. It reads only the capability-scoped JSON context sent on stdin and returns a JSON result proposal.",
+  "runtime": "python:3.12-alpine",
+  "entrypoint": "plugin.py",
+  "capabilities": [
+    "knowledge.read",
+    "case.read",
+    "threatintel.read"
+  ],
+  "required_permissions": []
+}
