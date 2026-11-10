@@ -1,0 +1,27 @@
+[Unit]
+Description=CyberForge Linux Node Telemetry Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cyberforge-node
+Group=cyberforge-node
+EnvironmentFile=/etc/cyberforge-node/agent.env
+ExecStart=/usr/bin/python3 /opt/cyberforge-node/agent.py
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

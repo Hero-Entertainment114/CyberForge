@@ -1,0 +1,1 @@
+{"timestamp":"2026-11-09T09:31:00.123456+0000","event_type":"alert","flow_id":90210,"src_ip":"192.0.2.18","src_port":42111,"dest_ip":"198.51.100.30","dest_port":443,"proto":"TCP","alert":{"signature_id":2026001,"signature":"Example test alert","category":"Potentially Bad Traffic","severity":2,"action":"allowed"}}

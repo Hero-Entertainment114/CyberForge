@@ -1,0 +1,4 @@
+# Optional dependencies for PostgreSQL-backed multi-instance operation.
+psycopg[binary]>=3.2,<4
+redis>=5,<7
+cryptography>=42,<47

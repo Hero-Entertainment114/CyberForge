@@ -2,14 +2,14 @@
 
 ## Supported release
 
-The latest tagged release is the preferred version for security fixes. Older versions may not receive patches.
+Use the latest stable tagged release when possible. Security fixes may not be backported to older releases.
 
 ## Reporting a vulnerability
 
-Please do not publish exploit details, credentials, private data, or weaponized proof-of-concept material in a public issue. Use GitHub's private vulnerability reporting / Security Advisory feature if it is enabled for this repository. If it is not enabled, open a minimal issue asking for a private contact channel without including sensitive details.
+Do not publish credentials, private data, exploit details, or weaponized proof-of-concept material in a public issue. Use GitHub's private vulnerability reporting / Security Advisory feature if enabled. Otherwise, open a minimal issue requesting a private reporting channel without including sensitive details.
 
-Include the affected version, environment, impact, reproducible safe steps, and relevant logs after removing secrets and personal data.
+Include the affected version, deployment mode (SQLite or PostgreSQL/Redis), Linux distribution, impact, safe reproduction steps, and logs with secrets removed.
 
 ## Scope
 
-Only test systems you own or are explicitly authorized to assess. CyberForge's defensive features do not establish authorization to test third-party systems.
+Only deploy sensors or run assessments on systems you own or are explicitly authorized to monitor. The presence of an integration adapter does not imply authorization, certification, or full upstream product compatibility.

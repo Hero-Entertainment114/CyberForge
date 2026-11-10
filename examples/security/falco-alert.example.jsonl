@@ -1,0 +1,1 @@
+{"time":"2026-11-09T09:32:00Z","rule":"Terminal shell in container","priority":"Warning","output":"A shell was started inside a container (user=app)","hostname":"linux-k8s-01","output_fields":{"proc.name":"sh","container.name":"web-api","evt.type":"execve"}}

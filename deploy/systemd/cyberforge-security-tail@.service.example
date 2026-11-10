@@ -1,0 +1,36 @@
+[Unit]
+Description=CyberForge continuous security telemetry shipper (%i)
+After=network-online.target cyberforge-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cyberforge-server
+Group=cyberforge-server
+WorkingDirectory=/opt/cyberforge-server/current
+EnvironmentFile=/etc/cyberforge-server/telemetry/%i.env
+StateDirectory=cyberforge-telemetry
+StateDirectoryMode=0700
+ExecStart=/opt/cyberforge-server/current/.venv/bin/python /opt/cyberforge-server/current/tools/tail_jsonl.py --source ${CF_TELEMETRY_SOURCE} --server ${CF_SERVER_URL} --input ${CF_TELEMETRY_FILE} --token-file ${CF_SENSOR_TOKEN_FILE} --state-file /var/lib/cyberforge-telemetry/checkpoints.sqlite3 --batch-size 25 --poll-interval 1
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/cyberforge-telemetry
+MemoryMax=256M
+CPUQuota=20%
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

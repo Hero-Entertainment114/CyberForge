@@ -1,4 +1,81 @@
 {
-  "edition": "aio",
-  "version": "1.9.9.1"
+  "product": "CyberForge Server Edition",
+  "edition": "server-linux",
+  "version": "2.1.0",
+  "platforms": [
+    "linux-x86_64",
+    "linux-aarch64"
+  ],
+  "entrypoint": "server.py",
+  "desktop_branch": "CyberForge AIO Desktop v1.9.9.1",
+  "runtime": "Python 3.10+",
+  "service_manager": "systemd",
+  "storage_backends": [
+    "sqlite-single-node",
+    "postgresql-shared"
+  ],
+  "optional_coordination": "redis",
+  "distributed_ai_queue": true,
+  "security_operations": {
+    "event_sources": [
+      "wazuh",
+      "suricata",
+      "zeek",
+      "falco",
+      "trivy",
+      "osquery"
+    ],
+    "normalized_event_api": true,
+    "incident_correlation": true,
+    "approved_data_only_playbooks": true,
+    "raw_payload_persistence": false,
+    "remote_command_execution": false,
+    "continuous_jsonl_tailer": true,
+    "security_intelligence": true,
+    "mitre_attack_candidates": "heuristic",
+    "ai_analyst": "sanitized_evidence_to_existing_ai_job_queue",
+    "supported_continuous_sources": [
+      "wazuh",
+      "suricata",
+      "zeek",
+      "falco",
+      "osquery"
+    ],
+    "trivy_ingestion": "batch",
+    "response_side_effects": false
+  },
+  "release_channel": "official-stable",
+  "detection_engineering": {
+    "rule_format": "cyberforge.normalized-event-rule.v1",
+    "lifecycle": [
+      "draft",
+      "validate",
+      "test",
+      "publish",
+      "retire",
+      "rollback_to_draft"
+    ],
+    "data_only": true,
+    "arbitrary_code_execution": false,
+    "sigma_compatibility": "not_claimed",
+    "default_two_person_publish": true,
+    "supported_sources": [
+      "wazuh",
+      "suricata",
+      "zeek",
+      "falco",
+      "trivy",
+      "osquery"
+    ],
+    "postgresql_migration": "migrations/0006_detection_engineering.sql"
+  },
+  "official_installer": {
+    "versioned_release_directories": true,
+    "atomic_current_symlink_switch": true,
+    "pre_upgrade_database_backup": true,
+    "backup_verification": true,
+    "schema_and_audit_preflight": true,
+    "loopback_health_check": true,
+    "automatic_code_and_unit_rollback_on_health_failure": true
+  }
 }
