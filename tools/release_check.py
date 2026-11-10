@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Fail-closed preflight checks for a CyberForge source release."""
+"""Deterministic static release checks for CyberForge Server Edition."""
 from __future__ import annotations
-import ast
 import json
-import re
+import os
 import shutil
 import subprocess
 import sys
@@ -12,136 +11,207 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-class IDs(HTMLParser):
+os.chdir(ROOT)
+
+class HTMLAudit(HTMLParser):
     def __init__(self):
-        super().__init__(); self.values=[]; self.scripts=[]; self.in_script=False
+        super().__init__()
+        self.ids: list[str] = []
+        self.scripts: list[str] = []
+        self._inline = False
     def handle_starttag(self, tag, attrs):
-        vals=dict(attrs)
-        if vals.get('id'): self.values.append(vals['id'])
-        if tag.lower()=='script': self.in_script=True
+        values = dict(attrs)
+        if values.get("id"):
+            self.ids.append(values["id"])
+        if tag == "script":
+            self._inline = not bool(values.get("src"))
+            if self._inline:
+                self.scripts.append("")
     def handle_endtag(self, tag):
-        if tag.lower()=='script': self.in_script=False
+        if tag == "script":
+            self._inline = False
     def handle_data(self, data):
-        if self.in_script and data.strip(): self.scripts.append(data)
+        if self._inline and self.scripts:
+            self.scripts[-1] += data
+
+
+def run(command: list[str], *, check=True):
+    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=check)
+
 
 def main() -> int:
-    failures=[]; warnings=[]
-    version=(ROOT/'VERSION.txt').read_text().strip()
-    manifest=json.loads((ROOT/'RELEASE_MANIFEST.json').read_text())
-    edition=json.loads((ROOT/'edition.json').read_text())
-    source=(ROOT/'cyberforge.py').read_text()
-    ui=(ROOT/'static/index.html').read_text()
-    checks={
-        'release_manifest_version': manifest.get('version')==version,
-        'edition_version': edition.get('version')==version,
-        'python_app_version': bool(re.search(rf'APP_VERSION\s*=\s*[\"\']{re.escape(version)}[\"\']',source)),
-        'ui_version': f'v{version}' in ui,
-        'release_notes_exist': (ROOT/str(manifest.get('release_notes',''))).is_file(),
-        'validation_notes_exist': (ROOT/str(manifest.get('validation_notes',''))).is_file(),
-        'diagnostics_module_exists': (ROOT/'runtime_diagnostics.py').is_file(),
-        'v191_security_module_exists': (ROOT/'v191_modules.py').is_file(),
-        'v191_security_tests_exist': (ROOT/'tests'/'test_v191_defensive_workbench.py').is_file(),
-        'v191_api_namespace_wired': '/api/v191/' in source and 'v191_modules.' in source,
-        'v192_dynamic_module_exists': (ROOT/'v192_modules.py').is_file(),
-        'v192_tests_exist': (ROOT/'tests'/'test_v192_dynamic_sandbox.py').is_file(),
-        'v192_api_namespace_wired': '/api/v192/' in source and 'v192_modules.' in source,
-        'v192_sandbox_ui_wired': 'dynamicSandboxWorkbench' in ui and 'offlineLLMWorkbench' in ui,
-        'v192_network_disabled_wsb': 'Networking' in (ROOT/'v192_modules.py').read_text() and 'Disable' in (ROOT/'v192_modules.py').read_text(),
-        'v193_module_exists': (ROOT/'v193_modules.py').is_file(),
-        'v193_tests_exist': (ROOT/'tests'/'test_v193_sandbox_ai.py').is_file(),
-        'v193_api_namespace_wired': '/api/v193/' in source and 'v193_modules.' in source,
-        'v193_loopback_netlab_wired': 'networkSimulationLab' in ui and '--network' in (ROOT/'v193_modules.py').read_text() and 'none' in (ROOT/'v193_modules.py').read_text(),
-        'v193_runner_exists': (ROOT/'sandbox'/'netlab'/'netlab_runner.py').is_file(),
-        'v193_dockerfile_exists': (ROOT/'sandbox'/'netlab'/'Dockerfile').is_file(),
-        'v193_ai_provider_policy': 'openrouter/free' in (ROOT/'v193_modules.py').read_text() and 'gemini-3.1-flash-lite' in (ROOT/'v193_modules.py').read_text(),
-        'v194_module_exists': (ROOT/'v194_modules.py').is_file(),
-        'v194_tests_exist': (ROOT/'tests'/'test_v194_telemetry_orchestration.py').is_file(),
-        'v194_api_namespace_wired': '/api/v194/' in source and 'v194_modules.' in source,
-        'v194_pcap_collector_exists': (ROOT/'sandbox'/'netlab'/'netlab_telemetry.py').is_file(),
-        'v195_netlab_image_versioned': 'cyberforge/netlab:1.9.5' in (ROOT/'v193_modules.py').read_text(),
-        'v194_pid_flow_correlation': 'pcap_flow_observed' in (ROOT/'v194_modules.py').read_text(),
-        'v194_qwen_paid_policy': 'qwen3.8-max' in (ROOT/'v193_modules.py').read_text() and 'PAID BY DEFAULT' in (ROOT/'v193_modules.py').read_text(),
-        'v195_module_exists': (ROOT/'v195_modules.py').is_file(),
-        'v195_tests_exist': (ROOT/'tests'/'test_v195_runtime_packet_agent.py').is_file(),
-        'v195_api_namespace_wired': '/api/v195/' in source and 'v195_modules.' in source,
-        'v195_ui_wired': 'v195Workbench' in ui and 'v195CreateAgentPlan' in ui,
-        'v195_pcapng_packet_and_timestamp_support': 'block_type == 2' in (ROOT/'v195_modules.py').read_text() and 'ts_resolution' in (ROOT/'v195_modules.py').read_text(),
-        'v195_windows_acceptance_script': (ROOT/'tools'/'windows_docker_acceptance.ps1').is_file(),
-        'v195_windows_acceptance_docs': (ROOT/'WINDOWS_DOCKER_ACCEPTANCE.md').is_file(),
-        'v195_smoke_probe_checks_packet_and_route': 'loopback_packet_seen' in (ROOT/'v195_modules.py').read_text() and 'default_route_absent' in (ROOT/'v195_modules.py').read_text(),
-        'v195_agent_per_step_approval': 'granularity' in source and 'execute_only_selected_steps' in source,
-        'v196_dev_ide_module_exists': (ROOT/'v196_modules.py').is_file(),
-        'v196_dev_ide_tests_exist': (ROOT/'tests'/'test_v196_dev_ide.py').is_file(),
-        'v196_ide_capabilities_api': '/api/dev/ide/capabilities' in source and 'v198_modules.ide_capabilities(' in source,
-        'v196_terminal_api_routes': all(x in source for x in ('/api/dev/terminal/open','/api/dev/terminal/input','/api/dev/terminal/interrupt','/api/dev/terminal/close')),
-        'v196_terminal_permission_gated': '"/api/dev/terminal/input": ["code_execution"]' in source,
-        'v196_monaco_pinned_loader': 'monaco-editor@0.57.0' in ui and '/static/vendor/monaco/min/vs' in ui,
-        'v196_monaco_vendor_tool': (ROOT/'tools'/'vendor_monaco.py').is_file(),
-        'v196_explorer_operations': 'devExplorerSelectedPath' in ui and 'function renderDevTree(items)' in ui and 'function deleteDevCurrent()' in ui,
-        'v196_command_palette_and_quick_open': 'function openDevCommandPalette' in ui and 'function openDevQuickOpen' in ui,
-        'v196_terminal_interrupt_ui': 'function interruptDevTerminal()' in ui and 'id="devTerminalInput"' in ui,
-        'v197_protocol_module_exists': (ROOT/'v197_modules.py').is_file(),
-        'v197_protocol_tests_exist': (ROOT/'tests'/'test_v197_ide_protocols.py').is_file(),
-        'v197_lsp_dap_api_routes': all(x in source for x in ('/api/dev/lsp/start','/api/dev/lsp/request','/api/dev/debugger/start','/api/dev/debugger/command')),
-        'v197_protocol_capabilities_api': '/api/dev/ide/protocols' in source and 'v198_modules.ide_capabilities(' in source,
-        'v197_monaco_lsp_providers': all(x in ui for x in ('registerCompletionItemProvider','registerHoverProvider','registerDefinitionProvider','registerSignatureHelpProvider')),
-        'v197_git_source_control': all(x in source for x in ('staged-diff','branch-create','branch-switch','identity')) and 'id="devGitSourceControl"' in ui,
-        'v197_no_arbitrary_vscode_extension_host': 'vscode_vsix_execution' in (ROOT/'v197_modules.py').read_text() and 'vscode_vsix_execution": False' in (ROOT/'v197_modules.py').read_text(),
-        'v198_module_exists': (ROOT/'v198_modules.py').is_file(),
-        'v198_tests_exist': (ROOT/'tests'/'test_v198_extensions_pty_multi_dap.py').is_file(),
-        'v198_ide_capabilities_wired': '/api/dev/ide/capabilities' in source and 'v198_modules.ide_capabilities(' in source,
-        'v198_extension_manager_routes': all(x in source for x in ('/api/dev/extensions/install','/api/dev/extensions/state','/api/dev/extensions/uninstall')),
-        'v198_declarative_extension_policy': 'declarative-only' in (ROOT/'v198_modules.py').read_text() and 'activationEvents' in (ROOT/'v198_modules.py').read_text() and 'executable_code_loaded\": False' in (ROOT/'v198_modules.py').read_text(),
-        'v198_multi_language_dap': all(x in (ROOT/'v198_modules.py').read_text() for x in ('cpp-lldb','dotnet-netcoredbg','python-debugpy')),
-        'v198_pty_terminal_manager': all(x in (ROOT/'v198_modules.py').read_text() for x in ('posix-pty','pywinpty-conpty','PtyProcess.spawn','pty.openpty')),
-        'v199_system_settings_api': '/api/system/settings' in source and '/api/system/settings/open' in source,
-        'v199_locale_allowlist': all(x in source for x in ('SUPPORTED_LOCALES', 'ar')),
-        'v199_system_settings_ui': 'id=\"systemsettings\"' in ui and 'function loadSystemSettings()' in ui,
-        'v199_modern_design_system': 'cf-v199-design' in ui,
-        'v199_default_english': '\"locale\": \"en\"' in source and 'APP_VERSION = \"1.9.9.1\"' in source,
-        'v199_backup_results_mirrored': "function systemBackupResultTargets(){return ['systemBackupResult','systemSettingsBackupResult']" in ui and 'writeSystemBackupResult' in ui,
-        'v199_locale_selector_sync': "if($('prefLocale'))$('prefLocale').value=selected;if($('sysAppLocale'))$('sysAppLocale').value=selected" in ui,
-        'v199_manifest_validation_complete': manifest.get('validation',{}).get('status')=='passed' and manifest.get('validation',{}).get('tests_passed')==661 and manifest.get('validation',{}).get('test_modules')==36,
-        'v199_twelve_locale_files': len([x for x in ('en','vi','es','fr','de','pt','ja','ko','zh','ru','ar','hi') if (ROOT/'locales'/f'{x}.json').is_file()])==12,
-        'v198_xterm_vendor_tool': (ROOT/'tools'/'vendor_xterm.py').is_file(),
-        'v198_windows_pty_requirement': (ROOT/'requirements-windows-pty.txt').is_file(),
-        'v198_terminal_resize_api': '/api/dev/terminal/resize' in source and 'DEV_TERMINAL_MANAGER.resize' in source,
-        'v1991_localized_error_runtime': all(x in ui for x in ('function cfErrorCode(', 'function cfErrorText(', 'function cfMakeError(', 'cfPermissionPrompt')),
-        'v1991_stale_locale_fallback_reset': 'const target=typeof translated===\'string\'?translated:original;' in ui and 'const result=typeof translated===\'string\'?translated:sourceValue;' in ui,
-        'v1991_mutation_observer_batching': 'function cfQueueTranslate(node)' in ui and 'queueMicrotask(' in ui,
-        'v1991_locale_loader_error_catalog': 'errors = raw.get(\"errors\", {})' in source and 'error catalog is malformed' in source,
-        'v1991_release_docs': (ROOT/'RELEASE_NOTES_1.9.9.1.md').is_file() and (ROOT/'TEST_RESULTS_1.9.9.1.md').is_file(),
-        'v1991_i18n_check_tool': (ROOT/'tools'/'i18n_check.py').is_file(),
-        'v1991_i18n_tests': (ROOT/'tests'/'test_v19991_i18n_fixes.py').is_file(),
-        'test_suite_exists': (ROOT/'tests').is_dir(),
-    }
-    for name,ok in checks.items():
-        print(('PASS' if ok else 'FAIL')+' '+name)
-        if not ok: failures.append(name)
-    parser=IDs(); parser.feed(ui); duplicates=sorted({x for x in parser.values if parser.values.count(x)>1})
-    print(('PASS' if not duplicates else 'FAIL')+f' html_unique_ids ({len(set(parser.values))} unique)')
-    if duplicates: failures.append('html_unique_ids: '+', '.join(duplicates[:20]))
-    for name in ('en','vi','es','fr','de','pt','ja','ko','zh','ru','ar','hi'):
-        try: json.loads((ROOT/f'locales/{name}.json').read_text())
-        except Exception as exc: failures.append(f'locale_{name}: {type(exc).__name__}')
-    print('PASS locales_json' if not any(x.startswith('locale_') for x in failures) else 'FAIL locales_json')
-    py_files=list(ROOT.glob('*.py'))+list((ROOT/'tests').glob('*.py'))+list((ROOT/'tools').glob('*.py'))+list((ROOT/'sandbox'/'netlab').glob('*.py'))
+    checks = []
+    # Python syntax without importing or executing application modules.
+    py_files = [p for p in ROOT.rglob("*.py") if "__pycache__" not in p.parts]
     for path in py_files:
-        try: compile(path.read_text(encoding='utf-8'),str(path),'exec')
-        except Exception as exc: failures.append(f'python_syntax:{path.relative_to(ROOT)}:{type(exc).__name__}')
-    print(('PASS' if not any(x.startswith('python_syntax:') for x in failures) else 'FAIL')+f' python_syntax ({len(py_files)} files)')
-    node=shutil.which('node')
+        compile(path.read_text(encoding="utf-8"), str(path), "exec")
+    checks.append(f"python_syntax={len(py_files)} files")
+
+    manifest = json.loads((ROOT / "RELEASE_MANIFEST.json").read_text(encoding="utf-8"))
+    edition = json.loads((ROOT / "edition.json").read_text(encoding="utf-8"))
+    version = (ROOT / "VERSION.txt").read_text(encoding="utf-8").strip()
+    if not version or manifest.get("version") != version or edition.get("version") != version:
+        raise SystemExit("Version mismatch between VERSION.txt, manifest and edition.json")
+    if (ROOT / "RELEASE_CHANNEL.txt").read_text(encoding="utf-8").strip() != "official-stable":
+        raise SystemExit("Release channel file is not official-stable")
+    if manifest.get("release_channel") != "official-stable" or manifest.get("official_stable") is not True:
+        raise SystemExit("RELEASE_MANIFEST.json does not identify an official-stable release")
+    if edition.get("release_channel") != "official-stable":
+        raise SystemExit("edition.json release channel mismatch")
+    discovered = int(manifest.get("tests_discovered", -1))
+    passed = int(manifest.get("tests_passed", -1))
+    skipped = int(manifest.get("tests_skipped", -1))
+    modules = int(manifest.get("test_modules", -1))
+    actual_modules = len(list((ROOT / "tests").glob("test_*.py")))
+    if discovered != passed + skipped or modules != actual_modules:
+        raise SystemExit("Release test counts/module count are inconsistent in RELEASE_MANIFEST.json")
+    checks.append(f"version_consistency={version}")
+    checks.append(f"official_stable_metadata=valid ({discovered} tests, {modules} modules)")
+
+    html = HTMLAudit()
+    html.feed((ROOT / "static/index.html").read_text(encoding="utf-8"))
+    dupes = sorted({x for x in html.ids if html.ids.count(x) > 1})
+    if dupes:
+        raise SystemExit(f"Duplicate HTML IDs: {dupes}")
+    checks.append(f"html_ids={len(html.ids)} unique")
+
+    node = shutil.which("node")
     if node:
-        with tempfile.TemporaryDirectory(prefix='cf-release-js-') as temp:
-            js=Path(temp)/'inline.js'; js.write_text('\n;\n'.join(parser.scripts),encoding='utf-8')
-            result=subprocess.run([node,'--check',str(js)],capture_output=True,text=True,timeout=15,check=False)
-            if result.returncode: failures.append('javascript_syntax: '+result.stderr[:500])
-        print(('PASS' if result.returncode==0 else 'FAIL')+' javascript_syntax')
+        with tempfile.TemporaryDirectory(prefix="cf-release-") as tmp:
+            for i, script in enumerate(html.scripts):
+                target = Path(tmp) / f"inline-{i}.js"
+                target.write_text(script, encoding="utf-8")
+                run([node, "--check", str(target)])
+        checks.append(f"javascript_syntax={len(html.scripts)} inline scripts")
     else:
-        warnings.append('Node.js unavailable; inline JavaScript syntax check skipped.')
-        print('SKIP javascript_syntax (Node.js not installed)')
-    print(f'RELEASE_PREFLIGHT version={version} failures={len(failures)} warnings={len(warnings)}')
-    for item in failures: print('ERROR '+item)
-    for item in warnings: print('WARNING '+item)
-    return 1 if failures else 0
-if __name__=='__main__': raise SystemExit(main())
+        checks.append("javascript_syntax=SKIPPED (node not installed)")
+
+    bash = shutil.which("bash")
+    scripts = sorted((ROOT / "deploy").rglob("*.sh")) + sorted((ROOT / "tools").rglob("*.sh"))
+    if bash:
+        for script in scripts:
+            run([bash, "-n", str(script)])
+        checks.append(f"shell_syntax={len(scripts)} scripts")
+    else:
+        checks.append("shell_syntax=SKIPPED (bash not installed)")
+
+    if "ai_control.py" not in {p.name for p in ROOT.glob("*.py")}:
+        raise SystemExit("Missing AI control plane module")
+    for endpoint in ("/api/v201/ai/models", "/api/v201/ai/queue", "/api/v201/ai/gpu", "/api/v201/ai/jobs"):
+        if endpoint not in (ROOT / "server.py").read_text(encoding="utf-8"):
+            raise SystemExit(f"Missing API route marker: {endpoint}")
+    if "/api/v202/cluster" not in (ROOT / "server.py").read_text(encoding="utf-8"):
+        raise SystemExit("Missing distributed cluster status API")
+    security_server = (ROOT / "server.py").read_text(encoding="utf-8")
+    for endpoint in ("/api/v203/security/sources", "/api/v203/security/overview",
+                     "/api/v203/security/events", "/api/v203/security/incidents",
+                     "/api/v203/security/ingest/", "/api/v203/security/playbooks/plan",
+                     "/api/v204/security/sources", "/api/v204/security/ingest/",
+                     "/api/v204/security/mitre/summary", "/api/v204/security/incidents/", "/ai-analysis"):
+        if endpoint not in security_server:
+            raise SystemExit(f"Missing Security Operations API route marker: {endpoint}")
+    for required in ("security_ops.py", "security_intelligence.py", "tools/ingest_jsonl.py",
+                     "tools/tail_jsonl.py", "docs/SECURITY_OPERATIONS.md", "docs/SECURITY_INTELLIGENCE.md",
+                     "deploy/systemd/cyberforge-security-tail@.service.example",
+                     "migrations/0003_security_operations.sql", "migrations/0004_security_intelligence.sql",
+                     "tests/test_security_ops.py", "tests/test_security_shipper.py",
+                     "tests/test_v204_security_intelligence.py", "tests/test_v204_telemetry_tail.py",
+                     "tests/test_v204_security_api.py"):
+        if not (ROOT / required).exists():
+            raise SystemExit(f"Missing Security Operations release file: {required}")
+    security_module = (ROOT / "security_ops.py").read_text(encoding="utf-8")
+    if "def list_events(" not in security_module or "SOURCES = (\"wazuh\", \"suricata\", \"zeek\", \"falco\", \"trivy\", \"osquery\")" not in security_module:
+        raise SystemExit("Missing normalized security event source/list support")
+    if '\"sensor\": [\"security:ingest\"]' not in (ROOT / "server_core.py").read_text(encoding="utf-8"):
+        raise SystemExit("Missing least-privilege sensor role")
+    core = (ROOT / "server_core.py").read_text(encoding="utf-8")
+    if "def claim_workflow(" not in core or "def renew_workflow(" not in core or "workflow_execution_lease_lost" not in core:
+        raise SystemExit("Missing distributed workflow execution lease controls")
+    for required in ("distributed.py", "requirements-distributed.txt", "docs/DISTRIBUTED_DEPLOYMENT.md", "migrations/0002_postgres_distributed.sql"):
+        if not (ROOT / required).exists():
+            raise SystemExit(f"Missing distributed release file: {required}")
+    checks.append("ai_control_api=present")
+    checks.append("distributed_storage_and_queue=present")
+    checks.append("distributed_workflow_leases=present")
+    security_intel = (ROOT / "security_intelligence.py").read_text(encoding="utf-8")
+    tailer = (ROOT / "tools/tail_jsonl.py").read_text(encoding="utf-8")
+    if "def incident_analysis(" not in security_intel or "def correlate_incident(" not in security_intel:
+        raise SystemExit("Missing security intelligence correlation/analysis")
+    if "def poll_once(" not in tailer or "instance_lock_path" not in tailer:
+        raise SystemExit("Missing continuous telemetry checkpoint/lock logic")
+    checks.append("security_operations_ingest_and_events=present")
+    checks.append("security_intelligence_and_mitre_candidate_analysis=present")
+    checks.append("continuous_jsonl_tailer_and_checkpoint=present")
+    checks.append("sensor_least_privilege=present")
+
+    # Threat Intelligence: ensure the bounded feed/IOC subsystem is present and versioned.
+    threat_server = (ROOT / "server.py").read_text(encoding="utf-8")
+    threat_module = (ROOT / "threat_intel.py").read_text(encoding="utf-8")
+    for endpoint in ("/api/v205/threat-intel/overview", "/api/v205/threat-intel/feeds",
+                     "/api/v205/threat-intel/iocs", "/api/v205/threat-intel/lookup",
+                     "/api/v205/threat-intel/import/stix", "/api/v205/threat-intel/import/json",
+                     "/api/v205/threat-intel/epss/lookup"):
+        if endpoint not in threat_server:
+            raise SystemExit(f"Missing Threat Intelligence API route marker: {endpoint}")
+    for required in ("threat_intel.py", "docs/THREAT_INTELLIGENCE.md", "migrations/0005_threat_intelligence.sql",
+                     "tests/test_v205_threat_intel.py", "RELEASE_NOTES_2.0.5.md", "TEST_RESULTS_2.0.5.md"):
+        if not (ROOT / required).exists():
+            raise SystemExit(f"Missing Threat Intelligence release file: {required}")
+    for required_function in ("def parse_stix_bundle(", "def _taxii_objects(", "def sync_feed(", "def lookup_many(", "def enrich_incident(", "def epss_lookup("):
+        if required_function not in threat_module:
+            raise SystemExit(f"Missing Threat Intelligence implementation: {required_function}")
+    if "CF_THREAT_INTEL_ALLOWED_HOSTS" not in (ROOT / ".env.example").read_text(encoding="utf-8"):
+        raise SystemExit("Missing Threat Intelligence host allowlist configuration example")
+    if '"threatintel:manage"' not in core or '"threatintel:enrich"' not in core:
+        raise SystemExit("Missing Threat Intelligence role scopes")
+    checks.append("threat_intelligence_ioc_stix_taxii_epss_api=present")
+    checks.append("threat_intelligence_docs_migration_and_tests=present")
+
+    # Official Stable v2.1.0: versioned data-only detection rules and transactional installer.
+    if version != "2.1.0":
+        raise SystemExit("This official-stable release check expects VERSION.txt=2.1.0")
+    if (ROOT / "RELEASE_CHANNEL.txt").read_text(encoding="utf-8").strip() != "official-stable":
+        raise SystemExit("Release channel is not official-stable")
+    detection_server = (ROOT / "server.py").read_text(encoding="utf-8")
+    for endpoint in ("/api/v210/detection/overview", "/api/v210/detection/rules",
+                     "/api/v210/detection/matches", "/api/v210/detection/rules/"):
+        if endpoint not in detection_server:
+            raise SystemExit(f"Missing Detection Engineering API route marker: {endpoint}")
+    detection_module = (ROOT / "detection_engine.py").read_text(encoding="utf-8")
+    for function in ("def create_draft(", "def revise_draft(", "def validate_rule(",
+                     "def test_rule(", "def publish_rule(", "def retire_rule(",
+                     "def rollback_to_version(", "def evaluate_in_transaction("):
+        if function not in detection_module:
+            raise SystemExit(f"Missing Detection Engineering implementation: {function}")
+    for required in ("detection_engine.py", "docs/DETECTION_ENGINEERING.md",
+                     "migrations/0006_detection_engineering.sql", "tests/test_detection_engine.py",
+                     "tests/test_official_release.py", "RELEASE_NOTES_2.1.0.md",
+                     "TEST_RESULTS_2.1.0.md", "docs/UPGRADE_BACKUP_RESTORE.md",
+                     "deploy/install.sh", "deploy/systemd/cyberforge-server.service",
+                     "RELEASE_CHANNEL.txt"):
+        if not (ROOT / required).exists():
+            raise SystemExit(f"Missing Official Stable release file: {required}")
+    install_script = (ROOT / "deploy/install.sh").read_text(encoding="utf-8")
+    for marker in ("mktemp -d", "backup --output", "verify-backup", "preflight",
+                   "mv -Tf", "rolling back the active release", "HEALTH_OK",
+                   "SERVICE_ENABLED_STATE", "systemctl daemon-reload"):
+        if marker not in install_script:
+            raise SystemExit(f"Official installer missing required transaction marker: {marker}")
+    service_unit = (ROOT / "deploy/systemd/cyberforge-server.service").read_text(encoding="utf-8")
+    if "/opt/cyberforge-server/current/.venv/bin/python" not in service_unit:
+        raise SystemExit("systemd service does not use the staged release virtual environment")
+    if '"detection:publish"' not in core or '"detection:read"' not in core:
+        raise SystemExit("Detection Engineering RBAC scopes missing")
+    if 'CF_DETECTION_REQUIRE_TWO_PERSON=1' not in (ROOT / ".env.example").read_text(encoding="utf-8"):
+        raise SystemExit("Two-person detection publishing default missing from .env.example")
+    checks.append("detection_engineering_lifecycle_api_rbac_migration=present")
+    checks.append("official_stable_staged_installer_backup_preflight_rollback=present")
+    checks.append("official_stable_channel_and_release_docs=present")
+
+    print("CyberForge Server Edition release checks: PASS")
+    for item in checks:
+        print(f"- {item}")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

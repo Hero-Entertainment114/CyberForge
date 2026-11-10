@@ -1,0 +1,27 @@
+[
+  {
+    "id": "ollama-local",
+    "model": "qwen2.5:7b",
+    "base_url": "http://127.0.0.1:11434/v1",
+    "billing_mode": "local",
+    "api_key_env": "CF_OLLAMA_API_KEY"
+  },
+  {
+    "id": "vllm-gpu-node",
+    "model": "Qwen/Qwen2.5-32B-Instruct",
+    "base_url": "https://inference.internal.example/v1",
+    "billing_mode": "local",
+    "api_key_env": "CF_VLLM_API_KEY"
+  },
+  {
+    "id": "commercial-gateway",
+    "model": "provider/model-name",
+    "base_url": "https://llm-gateway.example.com/v1",
+    "billing_mode": "paid",
+    "api_key_env": "CF_COMMERCIAL_AI_KEY",
+    "input_price_per_1m": 1.0,
+    "output_price_per_1m": 4.0,
+    "daily_budget_usd": 5.0,
+    "max_request_usd": 0.25
+  }
+]

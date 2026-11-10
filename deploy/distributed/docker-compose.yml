@@ -1,0 +1,36 @@
+# Development / private-network reference only. Do not publish these ports publicly.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cyberforge
+      POSTGRES_USER: cyberforge
+      POSTGRES_PASSWORD: ${CF_POSTGRES_PASSWORD:?Set CF_POSTGRES_PASSWORD in a protected .env file}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - cyberforge-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyberforge -d cyberforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${CF_REDIS_PASSWORD:?Set CF_REDIS_PASSWORD in a protected .env file}"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - cyberforge-redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$CF_REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  cyberforge-postgres:
+  cyberforge-redis:

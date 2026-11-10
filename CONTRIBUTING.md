@@ -1,14 +1,15 @@
-# Contributing to CyberForge AIO
+# Contributing to CyberForge Server Edition
 
 Thank you for considering a contribution.
 
-## Before opening a change
+## Contribution requirements
 
-- Keep changes focused and explain the user-facing impact.
-- Do not commit API keys, passwords, private keys, local databases, logs, user projects, or runtime data.
-- Preserve the existing permission checks and loopback-only service boundary.
-- Do not represent optional integrations as available unless they are actually detected and tested.
-- Include regression tests for bug fixes and feature changes.
+- Keep changes focused and document operational impact.
+- Never commit API keys, passwords, private keys, `.env` files, database backups, logs, customer telemetry, or incident evidence.
+- Preserve loopback-by-default binding, TLS requirements for remote databases/providers, RBAC, audit logging, and approval gates.
+- Do not add arbitrary remote-shell or endpoint-control capabilities without a separately reviewed threat model and explicit authorization design.
+- Clearly distinguish tested connectors from catalog metadata and simulated fixtures.
+- Include regression tests and migration coverage for database changes.
 
 ## Local checks
 
@@ -20,8 +21,8 @@ python -m unittest discover -s tests -v
 python tools/release_check.py
 ```
 
-Some platform-specific checks require Windows, macOS, Docker Desktop, or optional local tools. Report the host OS and exact commands used when a check cannot be run.
+The three PostgreSQL integration tests require a test database configured with `CF_TEST_POSTGRES_URL`. Redis, GPU, and vendor-specific checks require the respective services/hardware/accounts and should be reported separately.
 
 ## Pull requests
 
-Describe the problem, the approach, compatibility impact, tests run, and any new permissions or network access. Avoid bundling binaries or vendored third-party code unless its license and provenance are documented.
+Describe the problem, operational assumptions, migration behavior, security impact, test environment, and rollback strategy. Third-party integrations must retain their upstream license and attribution.

@@ -1,0 +1,26 @@
+[Unit]
+Description=CyberForge Server Edition control plane instance %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cyberforge-server
+Group=cyberforge-server
+WorkingDirectory=/opt/cyberforge-server
+EnvironmentFile=/etc/cyberforge-server/instances/%i.env
+ExecStart=/usr/bin/python3 /opt/cyberforge-server/server.py serve
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cyberforge-server /run/cyberforge-server
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
